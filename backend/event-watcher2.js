@@ -8,7 +8,7 @@ const {
   approveForBurn,
   burnTokens,
   transferToEthWallet,
-} = require('./contract-methods.js')
+} = require('./contract-methods-test.js')
 
 const ORIGIN_TOKEN_CONTRACT_ADDRESS = process.env.ORIGIN_TOKEN_CONTRACT_ADDRESS
 const DESTINATION_TOKEN_CONTRACT_ADDRESS =
@@ -17,29 +17,29 @@ const BRIDGE_WALLET = process.env.BRIDGE_WALLET
 
 const BRIDGE_WALLET_KEY = process.env.BRIDGE_PRIV_KEY
 
-const CHSD_ABIJSON = require('./ChainstackDollars.json')
-const QCHSD_ABIJSON = require('./DChainstackDollars.json')
+const CHSD_ABIJSON = require("./lock.json");//('./ChainstackDollars.json')
+const QCHSD_ABIJSON = require("./DToken.json");//('./DChainstackDollars.json')
 
 const handleEthEvent = async (event, provider, contract) => {
   console.log('handleEthEvent')
-  const { from, to, value } = event.returnValues
-
-  console.log('to :>> ', to)
+  //const { from, to, value } = event.returnValues
+  const { amount, sender, receiver } = event.returnValues;
+  /*console.log('to :>> ', to)
   console.log('from :>> ', from)
-  console.log('value :>> ', value) 
+  console.log('value :>> ', value) */
 
   
   console.log('============================')
 
-  if (from == BRIDGE_WALLET) {
+  /*if (to == BRIDGE_WALLET) {
     console.log('Transfer is a bridge back')
     return
-  }
-  if (to == BRIDGE_WALLET && to != from) {
+  }*/
+  if (BRIDGE_WALLET == BRIDGE_WALLET ) {
     console.log('Tokens received on bridge from ETH chain! Time to bridge!')
 
     try {
-      const tokensMinted = await mintTokens(provider, contract, value, from)
+      const tokensMinted = await mintTokens(provider, contract, amount, sender)
       if (!tokensMinted) return
       console.log('🌈🌈🌈🌈🌈 Bridge to destination completed')
     } catch (err) {
@@ -58,27 +58,27 @@ const handleDestinationEvent = async (
   providerDest,
   contractDest
 ) => {
-  const { from, to, value } = event.returnValues
- 
+  //const { from, to, value } = event.returnValues
+  const { sender, to, amount } = event.returnValues;
   console.log('handleDestinationEvent')
-  console.log('to :>> ', to)
+  /*console.log('to :>> ', to)
   console.log('from :>> ', from)
-  console.log('value :>> ', value) 
+  console.log('value :>> ', value) */ 
   console.log('============================')
 
-  if (from == process.env.WALLET_ZERO) {
+  if ( sender == process.env.WALLET_ZERO) {
     console.log('Tokens minted')
     return
   }
 
-  if (to == BRIDGE_WALLET && to != from) {
+  if (BRIDGE_WALLET == BRIDGE_WALLET && to != sender) {
     console.log(
       'Tokens received on bridge from destination chain! Time to bridge back!'
     )
 
     try {
       // we need to approve burn, then burn
-      const tokenBurnApproved = await approveForBurn(
+      /*const tokenBurnApproved = await approveForBurn(
         providerDest,
         contractDest,
         value
@@ -90,12 +90,12 @@ const handleDestinationEvent = async (
       if (!tokensBurnt) return
       console.log(
         'Tokens burnt on destination, time to transfer tokens in ETH side'
-      )
+      ) */
       const transferBack = await transferToEthWallet(
         provider,
         contract,
-        value,
-        from
+        amount, //value,
+        sender, //from
       )
       if (!transferBack) return
 
@@ -137,15 +137,16 @@ const main = async () => {
     )
 
   let options = {
-    // filter: {
+    filter: {
     //   value: ['1000', '1337'], //Only get events where transfer value was 1000 or 1337
-    // },
-    // fromBlock: 0, //Number || "earliest" || "pending" || "latest"
+    value: ["0.0000000001"],
+    },
+    fromBlock: "latest", //Number || "earliest" || "pending" || "latest"
     // toBlock: 'latest',
   }
 
   originTokenContract.events
-    .Transfer(options)
+   /* .Transfer*/.Received(options)
     .on('data', async (event) => {
       await handleEthEvent(
         event,
@@ -159,7 +160,7 @@ const main = async () => {
   console.log(`Waiting for Transfer events on ${ORIGIN_TOKEN_CONTRACT_ADDRESS}`)
 
   destinationTokenContract.events
-    .Transfer(options)
+    /*.Transfer*/ .Burn(options)
     .on('data', async (event) => {
       await handleDestinationEvent(
         event,
